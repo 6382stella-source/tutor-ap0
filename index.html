@@ -797,7 +797,8 @@ function vSettings(){
     <div class="sec-ttl" style="padding:0 0 8px">데이터 관리</div>
     <div class="card" style="margin:0 0 12px"><div class="card-body" style="display:flex;flex-direction:column;gap:10px">
       <button class="btn btn-secondary" onclick="exportData()">📤 백업 (JSON 내보내기)</button>
-      <label class="btn btn-outline" style="cursor:pointer">📥 복원 (JSON 가져오기)<input type="file" accept=".json" style="display:none" onchange="importData(this)"></label>
+      <button class="btn btn-outline" onclick="document.getElementById('restore-input').click()">📥 복원 (JSON 가져오기)</button>
+      <input type="file" id="restore-input" accept=".json,application/json,text/plain" style="display:none;position:absolute" onchange="importData(this)">
     </div></div>
     <div class="card" style="margin:0 0 12px"><div class="card-body">
       ${window.matchMedia("(display-mode:standalone)").matches?`<div style="text-align:center;padding:10px;background:#eaf7ee;border-radius:10px;color:#27ae60;font-weight:600;font-size:14px">✅ 앱으로 설치됨</div>`:`<button class="btn btn-primary" onclick="showInstallGuide()">📱 홈 화면에 앱으로 추가</button>`}
@@ -1108,10 +1109,32 @@ function exportData(){
   a.download='수업기록_백업_'+today()+'.json';a.click();showToast('백업 파일 저장 완료!');
 }
 function importData(inp){
-  const f=inp.files[0];if(!f)return;
+  const f=inp.files[0];
+  inp.value=''; // 같은 파일 재선택 허용
+  if(!f)return;
   const r=new FileReader();
-  r.onload=e=>{try{const d=JSON.parse(e.target.result);if(d.students)S.students=d.students;if(d.logs)S.logs=d.logs;if(d.grades)S.grades=d.grades;if(d.settings)S.settings=d.settings;persist();render();showToast('복원 완료!');}catch{showToast('파일을 읽을 수 없어요');}};
-  r.readAsText(f);
+  r.onerror=()=>showToast('❌ 파일을 읽을 수 없어요');
+  r.onload=e=>{
+    try{
+      const raw=e.target.result;
+      const d=JSON.parse(raw);
+      if(!d||typeof d!=='object'||!d.students){showToast('❌ 올바른 백업 파일이 아니에요');return;}
+      customConfirm(
+        `<b>${d.students.length}명</b>의 학생 · <b>${(d.logs||[]).length}개</b>의 수업기록을<br>현재 데이터에 덮어쓸까요?`,
+        ()=>{
+          if(d.students)S.students=d.students;
+          if(d.logs)S.logs=d.logs;
+          if(d.grades)S.grades=d.grades;
+          if(d.settings)S.settings=d.settings;
+          persist();go('home');
+          showToast(`✅ 복원 완료! 학생 ${S.students.length}명`);
+        }, '복원', '#1a3d6b'
+      );
+    }catch(err){
+      showToast('❌ JSON 파싱 실패: '+err.message.slice(0,30));
+    }
+  };
+  r.readAsText(f,'utf-8');
 }
 
 // ══════════════════════════════════════════
