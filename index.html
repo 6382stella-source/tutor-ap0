@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -222,7 +222,8 @@ canvas{max-width:100% !important;}
 let _deferredPrompt=null;
 window.addEventListener('beforeinstallprompt',e=>{
   e.preventDefault();_deferredPrompt=e;
-  if(!sessionStorage.getItem('bannerDismissed')){
+  const isStandalone=window.matchMedia('(display-mode:standalone)').matches||window.navigator.standalone;
+  if(!isStandalone&&!sessionStorage.getItem('bannerDismissed')){
     setTimeout(()=>document.getElementById('install-banner')?.classList.add('show'),1500);
   }
 });
@@ -368,7 +369,7 @@ let S={
   activeStudentId:null, editStudentId:null, editLogId:null,
   logForm:{}, gradeForm:{},
   nlStep:1, nlSelectedIds:new Set(), nlForm:{section1:'',achievements:'',improvements:'',planRows:[]}, nlS1:1,nlS2:1,
-  radarFilter:'all', lineFilter:'all', lineMetric:'score', editGradeId:null, editSubjects:[], _subjId:null,
+  radarFilter:'all', lineFilter:'all', lineMetric:'score', editGradeId:null, editSubjects:[], _subjId:null, showAllLogs:null,
   editGradeId:null
 };
 const persist=()=>{save('students',S.students);save('logs',S.logs);save('grades',S.grades);save('settings',S.settings);};
@@ -385,10 +386,10 @@ const destroyChart=id=>{if(_charts[id]){_charts[id].destroy();delete _charts[id]
 function render(){
   Object.keys(_charts).forEach(destroyChart);
   document.getElementById('app').innerHTML=buildView();
-  if(S.view==='studentDetail')setTimeout(()=>initRadar(),60);
-  if(S.view==='grades')setTimeout(()=>initLine(),60);
+
+
 }
-function go(view,extra={}){Object.assign(S,{view,...extra});render();}
+function go(view,extra={}){if(view!=='studentDetail')S.showAllLogs=null;Object.assign(S,{view,...extra});render();}
 
 function buildView(){
   if(S.view==='home')return vHome();
@@ -415,7 +416,7 @@ function vHome(){
         <div class="s-av">${initials}</div>
         <div class="s-info">
           <div class="s-name">${s.name}${ddBadge}</div>
-          <div class="s-meta">${(Array.isArray(s.subjects)?s.subjects.join('·'):s.subjects)||'과목미설정'} · ${logs.length}회 수업${last?' · 최근: '+last.unit:''}</div>
+          <div class="s-meta">${(Array.isArray(s.subjects)?s.subjects.join('·'):s.subjects)||'과목미설정'} · ${logs.length}회 수업${last?' · 최근: '+(last.units||[last.unit]).filter(Boolean).join('·'):''}</div>
           ${dd!==null?`<div style="font-size:11px;color:#8898b0;margin-top:2px;">📅 ${s.nextExamName||'다음 시험'} ${fmtDate(s.nextExamDate)}</div>`:''}
         </div>
       </div>
@@ -437,7 +438,9 @@ function vHome(){
 function vDetail(){
   const s=gd(); if(!s)return vHome();
   const logs=getLogs(s.id), dd=calcDday(s.nextExamDate);
-  const total=parseInt(s.totalSessions)||0, done=logs.length;
+  const total=parseInt(s.totalSessions)||0;
+  const base=parseInt(s.lastNlSession)||0;
+  const done=base?logs.filter(l=>l.session>base).length:logs.length;
   const remain=total?total-done:null;
   const progPct=total?Math.min(100,Math.round(done/total*100)):0;
   const danger=remain!==null&&remain<=1;
@@ -455,7 +458,9 @@ function vDetail(){
     <div class="prog-note">${remain!==null?`잔여 ${remain}회차${remain<=0?' — ⚠️ 결제 회차 소진!':remain===1?' — ⚠️ 마지막 회차!':''}`:''}</div>
   </div>`:'';
 
-  const logItems=logs.slice().reverse().slice(0,20).map(l=>`
+  const showAll=S.showAllLogs===s.id;
+  const dispLogs=showAll?logs.slice().reverse():logs.slice().reverse().slice(0,8);
+  const logItems=dispLogs.map(l=>`
     <div class="log-item">
       <div class="log-sess">${l.session}회</div>
       <div class="log-body">
@@ -473,6 +478,7 @@ function vDetail(){
       </div>
     </div>`).join('');
   const emptyLogs=!logs.length?`<div style="padding:28px 16px;text-align:center;color:#aab0bc;font-size:13.5px">수업 기록이 없어요</div>`:'';
+  const moreBtn=logs.length>8&&!showAll?`<div style="text-align:center;padding:10px"><button class="btn btn-gray btn-sm" onclick="S.showAllLogs='${s.id}';render()">전체 보기 (${logs.length}개) ↓</button></div>`:'';
 
   return`<div class="hdr">
     <button class="hdr-back" onclick="go('home')">‹</button>
@@ -486,12 +492,8 @@ function vDetail(){
       <button class="btn btn-success" style="flex:1" onclick="startNewsletter('${s.id}')">📄 통신문</button>
       <button class="btn btn-secondary" style="flex:1" onclick="go('grades',{activeStudentId:'${s.id}',gradeForm:{}})">📊 성적</button>
     </div>
-    <div class="sec-ttl">누적 수업 기반 영역별 이해도</div>
-    <div class="card" style="margin:0 16px 12px"><div class="card-body">
-      <div class="chart-wrap" style="height:220px"><canvas id="radarChart"></canvas></div>
-    </div></div>
     <div class="sec-ttl">최근 수업 기록</div>
-    <div class="card" style="margin:0 16px 12px">${logItems}${emptyLogs}</div>
+    <div class="card" style="margin:0 16px 12px">${logItems}${moreBtn}${emptyLogs}</div>
     <div style="padding:0 16px 8px">
       <button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}')">🗑 학생 삭제</button>
     </div>
@@ -519,7 +521,7 @@ function vAddStudent(){
     <div class="f-row"><label class="f-label">교습료 (월)</label>
       <div style="display:flex;align-items:center;gap:6px;border:2px solid #e4eaf2;border-radius:11px;padding:0 13px;background:#fff;transition:border-color .15s" onfocus-within="this.style.borderColor='#1a3d6b'">
         <span style="color:#8898b0;font-size:14px;white-space:nowrap">월</span>
-        <input id="ffee" type="text" value="${d.fee}" placeholder="300,000" oninput="fmtFee(this)" style="flex:1;border:none;outline:none;font-size:15px;padding:12px 4px">
+        <input id="ffee" type="text" value="${d.fee?Number((d.fee+'').replace(/[^0-9]/g,'')).toLocaleString('ko-KR')||d.fee:''}" placeholder="300,000" oninput="fmtFee(this)" style="flex:1;border:none;outline:none;font-size:15px;padding:12px 4px">
         <span style="color:#8898b0;font-size:14px">원</span>
       </div>
     </div>
@@ -545,13 +547,17 @@ function vLog(){
   const f=S.logForm, s=S.students.find(st=>st.id===f.studentId);
   const sSubjects=s?.subjects;const subjList=(Array.isArray(sSubjects)&&sSubjects.length)?sSubjects:SUBJECTS_LIST;
   const unitList=f.subject&&UNITS[f.subject]?Object.keys(UNITS[f.subject]):[];
-  const subUnitList=f.subject&&f.unit&&UNITS[f.subject]&&UNITS[f.subject][f.unit]?UNITS[f.subject][f.unit]:[];
+  const selUnits=f.units||[];
+  const activeUnit=f.activeUnit;
+  // 소단원 목록은 activeUnit(방금 선택한 대단원)의 것만 표시
+  const subUnitList=activeUnit&&f.subject&&UNITS[f.subject]&&UNITS[f.subject][activeUnit]
+    ?UNITS[f.subject][activeUnit]:[];
   const subUnits=f.subUnits||[];
 
-  const subjChips=subjList.map(sub=>`<div class="chip${f.subject===sub?' sel':''}" onclick="setLF('subject','${sub}');setLF('unit','');render()">${sub}</div>`).join('');
-  const unitChips=unitList.map(u=>`<div class="chip${f.unit===u?' sel':''}" onclick="setLF('unit','${u}');render()">${u}</div>`).join('');
+  const subjChips=subjList.map(sub=>`<div class="chip${f.subject===sub?' sel':''}" onclick="setLF('subject','${sub}');setLF('activeUnit',null);render()">${sub}</div>`).join('');
+  const unitChips=unitList.map(u=>`<div class="chip${selUnits.includes(u)?' sel':''}" onclick="toggleLogUnit(this)" data-v="${u}">${u}</div>`).join('');
   const subUnitBtns=subUnitList.map((c,i)=>`<div class="chip${subUnits.includes(c)?' sel':''}" onclick="toggleSubUnit(this.dataset.v)" data-v="${c}">${c}</div>`).join('');
-  const selectedChips=subUnits.map((c,i)=>`<div class="chip-x">${c}<button onclick="removeSubUnit(this.parentElement.dataset.v)" data-v="${c}">×</button></div>`).join('');
+  const selectedChips=subUnits.filter(c=>typeof c==='string'&&c).map((c,i)=>`<div class="chip-x">${c}<button onclick="removeSubUnit(this.dataset.v)" data-v="${c}" title="제거">×</button></div>`).join('');
   const undBtns=UND.map((l,i)=>`<div class="und-btn${f.understanding===i?' '+UND_UC[i]:''}" onclick="setLF('understanding',${i});render()">${l}</div>`).join('');
   const hwBtns=HW.map((l,i)=>`<div class="hw-btn${f.homework===i?' '+HW_UC[i]:''}" onclick="setLF('homework',${i});render()">${l}</div>`).join('');
 
@@ -562,7 +568,7 @@ function vLog(){
   <div class="screen" style="padding:16px">
     <div class="f-row-2">
       <div><label class="f-label">날짜</label><input class="f-input" id="fdate" type="date" value="${f.date}" oninput="setLF('date',this.value)"></div>
-      <div><label class="f-label">회차</label><input class="f-input" id="fsess" type="text" value="${f.session}" oninput="setLF('session',parseInt(this.value)||1)" style="text-align:center;font-weight:700;font-size:18px"></div>
+      <div><label class="f-label">회차</label><input class="f-input" id="fsess" type="number" min="1" value="${f.session}" oninput="setLF('session',this.value)" style="text-align:center;font-weight:700;font-size:18px"></div>
     </div>
     <div class="f-row"><label class="f-label">과목</label><div class="chips">${subjChips}</div></div>
     ${unitList.length?`<div class="f-row"><label class="f-label">대단원 (복수 선택 가능)</label><div class="chips">${unitChips}</div></div>`:''}
@@ -607,7 +613,7 @@ function vNewsletter(){
     const f=S.nlForm;
     return`<div class="hdr"><button class="hdr-back" onclick="S.nlStep=1;render()">‹</button><div class="hdr-title">내용 작성</div><div class="hdr-sub">${s.name}</div></div>
     <div class="screen" style="padding:16px">${stepBar}
-      <div class="f-row"><label class="f-label">① 학습 내용 (수정 가능)</label>
+      <div class="f-row"><label class="f-label">① 학습 내용 <span style="font-size:11px;color:#1a3d6b;background:#eaf1fa;padding:1px 6px;border-radius:4px">자동완성됨</span></label>
         <textarea class="f-input" style="min-height:180px;font-size:12.5px" oninput="S.nlForm.section1=this.value">${f.section1}</textarea>
       </div>
       <div class="f-row"><label class="f-label">② 성취도 및 발전 사항</label>
@@ -619,25 +625,34 @@ function vNewsletter(){
       <div class="f-row"><label class="f-label">④ 향후 학습 계획</label>
         ${(f.planRows||[]).map((r,i)=>{
           const sSubjs=Array.isArray(s.subjects)?s.subjects:(s.subjects?[s.subjects]:[]);
-          const allUnits=[...new Set(sSubjs.flatMap(subj=>Object.keys(UNITS[subj]||{})))];
-          const subUnitList=r.unit?Object.entries(UNITS).reduce((acc,[subj,units])=>units[r.unit]?units[r.unit]:acc,[]):[]; 
+          const planActiveSubj=r.activeSubj||null;
+          const planUnitList=planActiveSubj&&UNITS[planActiveSubj]?Object.keys(UNITS[planActiveSubj]):[];
           const selSu=r.subUnits||[];
-          const available=subUnitList.filter(su=>!selSu.includes(su));
+          const selUnitsRow=r.units||[];
+          const activeUnitRow=r.activeUnit||null;
+          // planActiveSubj 기준 직접 lookup → 없으면 전체 검색
+          const subUnitListRow=planActiveSubj&&activeUnitRow&&UNITS[planActiveSubj]&&UNITS[planActiveSubj][activeUnitRow]
+            ?UNITS[planActiveSubj][activeUnitRow]
+            :(activeUnitRow?getSubUnitsFor(activeUnitRow):[]);
           return`<div style="background:#f7fafd;border-radius:10px;padding:12px;margin-bottom:8px;border:1px solid #e4eaf2">
-            <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
-              <select class="f-input" style="flex:2;min-width:100px;font-size:13px;padding:8px 9px" data-idx="${i}" onchange="setPlanUnit(this)">
-                <option value="">대단원 선택</option>
-                ${allUnits.map(u=>`<option value="${u}" ${r.unit===u?'selected':''}>${u}</option>`).join('')}
-              </select>
+            <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;flex-wrap:wrap">
               <input class="f-input" type="date" style="flex:1.5;min-width:110px;font-size:13px;padding:8px 7px" value="${r.date||''}" oninput="S.nlForm.planRows[${i}].date=this.value">
               <input class="f-input" type="number" style="flex:1;min-width:56px;font-size:13px;padding:8px 7px;text-align:center" value="${r.session||''}" min="1" placeholder="회차" oninput="S.nlForm.planRows[${i}].session=this.value">
               ${(f.planRows||[]).length>1?`<button style="background:#fdeaea;border:none;border-radius:8px;color:#b53030;cursor:pointer;padding:8px 10px;font-size:13px;flex-shrink:0" onclick="S.nlForm.planRows.splice(${i},1);render()">×</button>`:''}
             </div>
+            <div style="font-size:11px;color:#8898b0;margin-bottom:4px;font-weight:600">과목</div>
+            <div class="chips" style="margin-bottom:8px">${sSubjs.map(subj=>`<div class="chip${planActiveSubj===subj?' sel':''}" style="font-size:12px;padding:5px 11px" onclick="setPlanSubj(${i},'${subj}')">${subj}</div>`).join('')}</div>
+            ${planActiveSubj?`<div style="font-size:11px;color:#8898b0;margin-bottom:4px;font-weight:600">대단원</div>
+            <div class="chips" style="margin-bottom:8px">${planUnitList.map(u=>`<div class="chip${selUnitsRow.includes(u)?' sel':''}" onclick="togglePlanUnit(this)" data-idx="${i}" data-u="${u}">${u}</div>`).join('')}</div>`:''}
             ${selSu.length?`<div style="margin-bottom:6px"><div style="font-size:11px;color:#8898b0;margin-bottom:4px;font-weight:600">선택된 소단원</div><div class="chips">${selSu.map(su=>`<div class="chip-x">${su}<button onclick="rmPlanSu(this)" data-idx="${i}" data-su="${su}">×</button></div>`).join('')}</div></div>`:''}
-            ${available.length?`<div><div style="font-size:11px;color:#8898b0;margin-bottom:4px;font-weight:600">소단원 추가</div><div class="chips">${available.map(su=>`<div class="chip" style="font-size:12px;padding:5px 11px" onclick="addPlanSu(this)" data-idx="${i}" data-su="${su}">${su}</div>`).join('')}</div></div>`:''}
+            <div><div style="font-size:11px;color:#8898b0;margin-bottom:4px;font-weight:600">소단원 선택</div>
+            ${subUnitListRow.length
+              ?`<div class="chips">${subUnitListRow.map(su=>`<div class="chip${selSu.includes(su)?' sel':''}" style="font-size:12px;padding:5px 11px" onclick="togglePlanSu(this)" data-idx="${i}" data-su="${su}">${su}</div>`).join('')}</div>`
+              :`<div style="font-size:12px;color:#c0c8d4;padding:4px 0">${activeUnitRow?'소단원을 찾을 수 없어요':'대단원을 먼저 선택하세요'}</div>`
+            }</div>
           </div>`;
         }).join('')}
-        <button class="btn btn-gray btn-sm" style="font-size:12px;padding:7px 12px;margin-top:4px" onclick="S.nlForm.planRows.push({id:uid(),unit:'',date:'',session:'',subUnits:[]});render()">+ 행 추가</button>
+        <button class="btn btn-gray btn-sm" style="font-size:12px;padding:7px 12px;margin-top:4px" onclick="S.nlForm.planRows.push({id:uid(),subject:null,activeSubj:null,units:[],activeUnit:null,date:'',session:'',subUnits:[]});render()">+ 행 추가</button>
       </div>
       <button class="btn btn-primary" onclick="nlPreview()">다음 → 미리보기</button>
     </div>`;
@@ -650,30 +665,24 @@ function vNewsletter(){
     const nowDate=today(); const [yr,mo,dy]=nowDate.split('-');
     const f=S.nlForm, st=S.settings;
 
-    const logsHtml=selLogs.map(l=>`<li style="margin-bottom:8px">
-      <b>${l.session}회차 (${fmtDate(l.date)})</b> — ${l.subject} · ${(l.units||(l.unit?[l.unit]:[])).filter(Boolean).join(', ')}<br>
-      ${(l.subUnits||[]).length?'소단원: '+(l.subUnits||[]).join(', ')+'<br>':''}
-      이해도: ${l.understanding>=0?UND[l.understanding]:'—'} &nbsp;|&nbsp; 과제: ${l.homework>=0?HW[l.homework]:'—'}
-      ${l.memo?'<br>메모: '+l.memo:''}
-    </li>`).join('');
 
     const nlHtml=`<div class="nl-preview" id="nl-preview-capture">
       <div class="p-hdr"><div class="p-title">${s.name} 학생 ${s1}~${s2}회차 통신문</div><div class="p-date">발송일: ${yr}년 ${mo}월 ${dy}일</div></div>
       <div class="p-greet"><div class="p-hi">안녕하십니까, 학부모님.</div>
       항상 자녀의 학업에 관심과 지원을 아끼지 않으시는 학부모님께 감사의 말씀을 드립니다. 이번 달 수업 진행 상황과 성과를 아래와 같이 안내드립니다.</div>
       <div class="p-sec"><div class="p-sec-hdr"><div class="p-sec-n">1</div><div class="p-sec-t">학습 내용</div></div>
-      <div class="p-content">${escHtml(f.section1)}</div></div>
-      ${f.achievements?`<div class="p-sec"><div class="p-sec-hdr"><div class="p-sec-n">2</div><div class="p-sec-t">성취도 및 발전 사항</div></div><div class="p-content">${escHtml(f.achievements)}</div></div>`:''}
-      ${f.improvements?`<div class="p-sec"><div class="p-sec-hdr"><div class="p-sec-n">3</div><div class="p-sec-t">개선 필요 사항</div></div><div class="p-content">${escHtml(f.improvements)}</div></div>`:''}
-      ${(f.planRows&&f.planRows.some(r=>r.unit||r.content))?`<div class="p-sec"><div class="p-sec-hdr"><div class="p-sec-n">4</div><div class="p-sec-t">향후 학습 계획</div></div>
+      <div class="p-content">${escHtml(f.section1).replace(/\n/g,"<br>")}</div></div>
+      ${f.achievements?`<div class="p-sec"><div class="p-sec-hdr"><div class="p-sec-n">2</div><div class="p-sec-t">성취도 및 발전 사항</div></div><div class="p-content">${escHtml(f.achievements).replace(/\n/g,"<br>")}</div></div>`:''}
+      ${f.improvements?`<div class="p-sec"><div class="p-sec-hdr"><div class="p-sec-n">3</div><div class="p-sec-t">개선 필요 사항</div></div><div class="p-content">${escHtml(f.improvements).replace(/\n/g,"<br>")}</div></div>`:''}
+      ${(f.planRows&&f.planRows.some(r=>(r.units&&r.units.length)||(r.subUnits&&r.subUnits.length)))?`<div class="p-sec"><div class="p-sec-hdr"><div class="p-sec-n">4</div><div class="p-sec-t">향후 학습 계획</div></div>
         <table class="nl-tbl"><thead><tr>
-          <th style="width:20%;text-align:left">단원</th><th style="width:16%">예정 날짜</th><th style="width:14%">예정 회차</th><th>예정 학습 내용</th>
+          <th style="width:20%;text-align:left">단원</th><th style="width:16%">예정 날짜</th><th style="width:14%">예정 회차</th><th>학습 내용</th>
         </tr></thead><tbody>
-          ${(f.planRows||[]).filter(r=>r.unit||r.content).map(r=>`<tr>
-            <td>${r.unit||'—'}</td>
-            <td style="text-align:center">${r.date||'—'}</td>
-            <td style="text-align:center">${r.session||'—'}</td>
-            <td>${r.content||'—'}</td>
+          ${(f.planRows||[]).filter(r=>(r.units&&r.units.length)||(r.subUnits&&r.subUnits.length)).map(r=>`<tr>
+            <td>${(r.units&&r.units.length)?r.units.join(', '):'—'}</td>
+            <td style="text-align:center">${r.date?fmtDate(r.date):'—'}</td>
+            <td style="text-align:center">${r.session?r.session+'회차':'—'}</td>
+            <td>${(r.subUnits&&r.subUnits.length)?r.subUnits.map(su=>`<span style="display:inline-block;background:#eaf1fa;color:#1a3d6b;border-radius:3px;padding:1px 6px;font-size:10px;font-weight:500;margin:1px 2px">${su}</span>`).join(''):'—'}</td>
           </tr>`).join('')}
         </tbody></table>
       </div>`:'' }
@@ -741,11 +750,9 @@ function vGrades(){
     <div><div class="hdr-title">성적 관리</div><div class="hdr-sub">${s.name}</div></div>
   </div>
   <div class="screen" style="padding:16px">
-    ${grades.length?`<div class="card" style="margin:0 0 12px"><div class="card-body">
-      ${typeToggle}${metricToggle}
-      <div class="chart-wrap" style="height:200px"><canvas id="lineChart"></canvas></div>
-    </div></div>`:''}
-    <div class="sec-ttl" style="padding:0 0 8px">성적 기록 추가</div>
+    ${grades.length?`<div class="sec-ttl" style="padding:0 0 8px">성적 기록</div>
+    <div class="card" style="margin:0 0 12px">${gradeItems}</div>`:''}
+    <div class="sec-ttl" style="padding:0 0 8px">${S.editGradeId?'성적 수정 중':'성적 추가'}</div>
     <div class="card" style="margin:0 0 12px"><div class="card-body">
       <div class="f-row-2">
         <div><label class="f-label">구분</label>
@@ -765,8 +772,7 @@ function vGrades(){
       <button class="btn btn-primary" onclick="saveGrade()">${S.editGradeId?'✅ 수정 완료':'+ 성적 추가'}</button>
       ${S.editGradeId?`<button class="btn btn-gray" style="margin-top:8px" onclick="S.editGradeId=null;S.gradeForm={};render()">✕ 취소</button>`:''}
     </div></div>
-    ${grades.length?`<div class="sec-ttl" style="padding:0 0 8px">성적 기록</div>
-    <div class="card" style="margin:0 0 12px">${gradeItems}</div>`:''}
+
   </div>`;
 }
 
@@ -794,7 +800,7 @@ function vSettings(){
       <label class="btn btn-outline" style="cursor:pointer">📥 복원 (JSON 가져오기)<input type="file" accept=".json" style="display:none" onchange="importData(this)"></label>
     </div></div>
     <div class="card" style="margin:0 0 12px"><div class="card-body">
-      <button class="btn btn-primary" onclick="showInstallGuide()">📱 홈 화면에 앱으로 추가</button>
+      ${window.matchMedia("(display-mode:standalone)").matches?`<div style="text-align:center;padding:10px;background:#eaf7ee;border-radius:10px;color:#27ae60;font-weight:600;font-size:14px">✅ 앱으로 설치됨</div>`:`<button class="btn btn-primary" onclick="showInstallGuide()">📱 홈 화면에 앱으로 추가</button>`}
       <div style="font-size:12px;color:#8898b0;margin-top:8px;text-align:center">앱처럼 전체화면으로 실행돼요</div>
     </div></div>
     <div class="card" style="margin:0 0 12px"><div class="card-body" style="font-size:12.5px;color:#8898b0;line-height:1.8">
@@ -866,13 +872,13 @@ function deleteStudent(id){
 
 function startLog(studentId){
   S.editLogId=null;
-  S.logForm={studentId,date:today(),session:nextSess(studentId),subject:'',units:[],subUnits:[],understanding:-1,homework:-1,memo:''};
+  S.logForm={studentId,date:today(),session:nextSess(studentId),subject:'',units:[],activeUnit:null,subUnits:[],understanding:-1,homework:-1,memo:''};
   go('logLesson');
 }
 function startEditLog(logId){
   const l=S.logs.find(l=>l.id===logId); if(!l)return;
   S.editLogId=logId;
-  S.logForm={...l,units:[...(l.units||(l.unit?[l.unit]:[]))],subUnits:[...(l.subUnits||[])]};
+  const eu=l.units||(l.unit?[l.unit]:[]);S.logForm={...l,units:[...eu],activeUnit:eu[eu.length-1]||null,subUnits:[...(l.subUnits||[])]};
   go('logLesson',{activeStudentId:l.studentId});
 }
 function setLF(k,v){S.logForm[k]=v;}
@@ -880,31 +886,31 @@ function toggleLogUnit(el){
   const u=el.dataset.v;
   if(!S.logForm.units)S.logForm.units=[];
   const i=S.logForm.units.indexOf(u);
-  if(i===-1)S.logForm.units.push(u);
-  else S.logForm.units.splice(i,1);
-  // 더 이상 유효하지 않은 소단원 제거
-  const validSubs=new Set((S.logForm.units||[]).flatMap(un=>{
-    const subj=S.logForm.subject;
-    return(subj&&UNITS[subj]&&UNITS[subj][un])||[];
-  }));
-  S.logForm.subUnits=(S.logForm.subUnits||[]).filter(c=>validSubs.has(c));
+  if(i===-1){
+    S.logForm.units.push(u);
+    S.logForm.activeUnit=u; // 방금 선택한 단원의 소단원 표시
+  } else {
+    S.logForm.units.splice(i,1);
+    // 소단원은 그대로 유지, activeUnit만 변경
+    S.logForm.activeUnit=S.logForm.units[S.logForm.units.length-1]||null;
+  }
   render();
 }
-function toggleSubUnit(el){const c=typeof el==='string'?el:el;const i=S.logForm.subUnits.indexOf(c);if(i===-1)S.logForm.subUnits.push(c);else S.logForm.subUnits.splice(i,1);render();}
-function removeSubUnit(el){const c=typeof el==='string'?el:el;S.logForm.subUnits=S.logForm.subUnits.filter(x=>x!==c);render();}
+function toggleSubUnit(el){const c=typeof el==='string'?el:(el&&el.dataset?el.dataset.v:null);if(!c)return;const i=S.logForm.subUnits.indexOf(c);if(i===-1)S.logForm.subUnits.push(c);else S.logForm.subUnits.splice(i,1);render();}
+function removeSubUnit(el){const c=typeof el==='string'?el:(el&&el.dataset?el.dataset.v:null);if(!c)return;S.logForm.subUnits=S.logForm.subUnits.filter(x=>x!==c);render();}
 
 function saveLog(){
   const f=S.logForm;
-  if(!(f.units&&f.units.length)){showToast('대단원을 선택해주세요');return;}
+  if(!Array.isArray(f.units)||f.units.filter(Boolean).length===0){showToast('대단원을 선택해주세요');return;}
   if(f.understanding<0){showToast('이해도를 선택해주세요');return;}
   if(S.editLogId){
     const l=S.logs.find(l=>l.id===S.editLogId);
-    if(l)Object.assign(l,{...f,session:Number(f.session)});
+    if(l)Object.assign(l,{...f,units:[...(f.units||[])],subUnits:[...(f.subUnits||[])],session:Number(f.session)});
   }else{
-    S.logs.push({id:uid(),...f,session:Number(f.session)});
+    S.logs.push({id:uid(),...f,units:[...(f.units||[])],subUnits:[...(f.subUnits||[])],session:parseInt(f.session)||1});
     if(!sessionStorage.getItem('warned')){
       sessionStorage.setItem('warned','1');
-      setTimeout(()=>alert('⚠️ 데이터 안내\n\n데이터는 브라우저 로컬 스토리지에 저장됩니다.\n브라우저 캐시·사이트 데이터 삭제 시 유실될 수 있습니다.\n\n설정 > 백업(JSON 내보내기)으로 정기 백업을 권장합니다!'),400);
+      setTimeout(()=>showToast('💾 설정 > 백업으로 정기 백업을 권장해요'),400);
     }
   }
   persist();showToast(S.editLogId?'수정 완료! ✅':'저장 완료! ✅');
@@ -964,7 +970,7 @@ function saveSettings(){
 }
 
 function startNewsletter(sid){
-  S.activeStudentId=sid;S.nlStep=1;S.nlSelectedIds=new Set();S.nlForm={section1:'',achievements:'',improvements:'',planRows:[{id:uid(),unit:'',date:'',session:'',subUnits:[]}]};
+  S.activeStudentId=sid;S.nlStep=1;S.nlSelectedIds=new Set();S.nlForm={section1:'',achievements:'',improvements:'',planRows:[{id:uid(),subject:null,activeSubj:null,units:[],activeUnit:null,date:'',session:'',subUnits:[]}]};
   go('newsletter');
 }
 function toggleNlLog(id,checked){
@@ -984,10 +990,55 @@ function nlNext(){
     txt+='\n';
   });
   S.nlForm.section1=txt.trim();
-  if(!S.nlForm.planRows||!S.nlForm.planRows.length)S.nlForm.planRows=[{id:uid(),unit:'',date:'',session:'',subUnits:[]}];
+  if(!S.nlForm.planRows||!S.nlForm.planRows.length)S.nlForm.planRows=[{id:uid(),subject:null,activeSubj:null,units:[],activeUnit:null,date:'',session:'',subUnits:[]}];
   S.nlStep=2;render();
 }
-function setPlanUnit(sel){const i=parseInt(sel.dataset.idx);S.nlForm.planRows[i].unit=sel.value;render();}
+function setPlanUnit(sel){
+  const i=parseInt(sel.dataset.idx);
+  const newU=sel.value, oldU=S.nlForm.planRows[i].unit;
+  S.nlForm.planRows[i].unit=newU;
+  if(newU!==oldU){
+    // 새 대단원의 소단원 전체 자동 선택
+    const subs=newU?Object.entries(UNITS).reduce((acc,[s,u])=>u[newU]?u[newU]:acc,[]):[];
+    S.nlForm.planRows[i].subUnits=[...subs];
+  }
+  render();
+}
+function setPlanSubj(i,subj){
+  S.nlForm.planRows[i].activeSubj=subj;
+  // 새 과목에 이미 선택된 단원이 있으면 그걸 activeUnit으로 자동 설정
+  const existing=(S.nlForm.planRows[i].units||[]).filter(u=>UNITS[subj]&&UNITS[subj][u]);
+  S.nlForm.planRows[i].activeUnit=existing.length?existing[existing.length-1]:null;
+  render();
+}
+function getSubUnitsFor(unit){
+  if(!unit)return[];
+  for(const[,units]of Object.entries(UNITS)){if(units[unit])return units[unit];}
+  return[];
+}
+function togglePlanUnit(el){
+  const i=parseInt(el.dataset.idx),u=el.dataset.u;
+  if(!S.nlForm.planRows[i].units)S.nlForm.planRows[i].units=[];
+  const arr=S.nlForm.planRows[i].units;
+  const idx=arr.indexOf(u);
+  if(idx===-1){
+    arr.push(u);
+    S.nlForm.planRows[i].activeUnit=u; // 소단원 표시 기준
+  } else {
+    arr.splice(idx,1);
+    // 소단원은 유지, activeUnit만 교체
+    S.nlForm.planRows[i].activeUnit=arr[arr.length-1]||null;
+  }
+  render();
+}
+function togglePlanSu(el){
+  const i=parseInt(el.dataset.idx),su=el.dataset.su;
+  if(!S.nlForm.planRows[i].subUnits)S.nlForm.planRows[i].subUnits=[];
+  const arr=S.nlForm.planRows[i].subUnits;
+  const idx=arr.indexOf(su);
+  if(idx===-1)arr.push(su);else arr.splice(idx,1);
+  render();
+}
 function addPlanSu(el){const i=parseInt(el.dataset.idx),su=el.dataset.su;if(!S.nlForm.planRows[i].subUnits)S.nlForm.planRows[i].subUnits=[];if(!S.nlForm.planRows[i].subUnits.includes(su))S.nlForm.planRows[i].subUnits.push(su);render();}
 function rmPlanSu(el){const i=parseInt(el.dataset.idx),su=el.dataset.su;S.nlForm.planRows[i].subUnits=(S.nlForm.planRows[i].subUnits||[]).filter(x=>x!==su);render();}
 function nlPreview(){
@@ -996,6 +1047,13 @@ function nlPreview(){
   S.nlStep=3;render();
 }
 
+function _markNlPaid(){
+  const s=gd();
+  if(!s||!S.nlS2)return;
+  s.lastNlSession=S.nlS2;
+  persist();
+  showToast('✅ '+s.nlS2+'회차까지 납부 완료로 기록됐어요');
+}
 function printNl(){
   const el=document.getElementById('nl-preview-capture');
   if(!el){showToast('미리보기 화면을 먼저 열어주세요');return;}
@@ -1011,6 +1069,7 @@ function printNl(){
       document.title=origTitle;
       document.getElementById('print-target').style.display='none';
       document.getElementById('nl-preview-print').innerHTML='';
+      _markNlPaid();
     },2000);
   }));
 }
@@ -1038,6 +1097,8 @@ function downloadNlImg(){
     const fn=s?`${s.name}_${S.nlS1}~${S.nlS2}회차_통신문`:'통신문'; a.download=fn+'.png';
     a.href=canvas.toDataURL('image/png',1.0);a.click();
     showToast('이미지 저장 완료! 🖼');
+    _markNlPaid();
+    _markNlPaid();
   }).catch(e=>{showToast('저장 실패: '+e.message);console.error(e);});
 }
 
