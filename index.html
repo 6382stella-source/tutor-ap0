@@ -212,13 +212,10 @@ canvas{max-width:100% !important;}
       orientation:'portrait-primary',
       icons:[{src:ico,sizes:'192x192',type:'image/png',purpose:'any maskable'},
              {src:ico,sizes:'512x512',type:'image/png',purpose:'any maskable'}]};
-    const blob=new Blob([JSON.stringify(mf)],{type:'application/json'});
-    document.getElementById('pwa-manifest').href=URL.createObjectURL(blob);
+    document.getElementById('pwa-manifest').href='./manifest.json';
   }catch(e){}
   if('serviceWorker' in navigator && location.protocol!=='file:'){
-    const sw=`self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(clients.claim()));self.addEventListener('fetch',e=>e.respondWith(fetch(e.request).catch(()=>caches.match(e.request))));`;
-    const swB=new Blob([sw],{type:'application/javascript'});
-    navigator.serviceWorker.register(URL.createObjectURL(swB)).catch(()=>{});
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
   }
 })();
 
@@ -267,18 +264,77 @@ function showInstallGuide(){
 // ══════════════════════════════════════════
 const SUBJECTS_LIST=['중1','중2','중3','공통수학1','공통수학2','대수','미적분1','확률과통계','미적분2','수1','수2'];
 const UNITS={
-'중1':{'소인수분해':['소수와 합성수','소인수분해','최대공약수와 최소공배수'],'정수와 유리수':['정수의 개념','유리수의 사칙연산'],'문자와 식':['문자의 사용','일차식 계산','일차방정식'],'함수':['좌표와 그래프','정비례와 반비례'],'통계':['도수분포표','상대도수'],'기본도형':['점·선·면·각','위치관계','작도와 합동'],'평면도형':['다각형','원과 부채꼴'],'입체도형':['다면체·회전체','겉넓이와 부피']},
-'중2':{'유리수와 순환소수':['유리수와 소수','순환소수'],'단항식과 다항식':['단항식 계산','다항식 계산'],'방정식':['연립방정식','연립방정식 활용'],'부등식':['일차부등식','연립부등식'],'일차함수':['일차함수 그래프','일차함수와 방정식'],'도형의 성질':['삼각형 성질','사각형 성질'],'도형의 닮음':['닮음','피타고라스 정리'],'확률':['경우의 수','확률의 계산']},
-'중3':{'실수와 그 계산':['제곱근','무리수와 실수'],'인수분해':['인수분해 공식','인수분해 활용'],'이차방정식':['이차방정식 풀이','이차방정식 활용'],'이차함수':['이차함수 그래프','이차함수 활용'],'삼각비':['삼각비','삼각비 활용'],'원의 성질':['원과 직선','원주각'],'통계':['대푯값·산포도','상관관계']},
-'공통수학1':{'다항식':['다항식 연산','나머지정리','인수분해'],'방정식과 부등식':['복소수','이차방정식','여러 가지 방정식','여러 가지 부등식'],'도형의 방정식':['평면좌표','직선의 방정식','원의 방정식','도형의 이동']},
-'공통수학2':{'집합과 명제':['집합','명제와 조건'],'함수':['함수','유리함수','무리함수'],'경우의 수':['순열','조합']},
-'대수':{'지수와 로그':['지수','로그'],'수열':['등차수열','등비수열','수열의 합','수학적 귀납법']},
-'미적분1':{'함수의 극한과 연속':['함수의 극한','함수의 연속'],'다항함수의 미분':['미분계수와 도함수','도함수 활용','극값·최대·최소'],'다항함수의 적분':['부정적분','정적분','정적분 활용']},
-'확률과통계':{'경우의 수':['순열','조합','이항정리'],'확률':['확률의 뜻','조건부확률','독립사건'],'통계':['이산확률변수','이항분포','정규분포','표본평균','모평균 추정']},
-'미적분2':{'수열의 극한':['수열의 극한','급수'],'여러 가지 함수의 미분':['지수·로그함수 미분','삼각함수 미분','여러 가지 미분법'],'여러 가지 적분법':['여러 가지 적분법','정적분의 활용']},
-'수1':{'지수와 로그':['지수법칙','지수함수 그래프','지수방정식·부등식','로그의 정의·성질','로그함수 그래프','상용로그·지표와 가수'],'삼각함수':['호도법','삼각함수의 정의','삼각함수 그래프','삼각함수 공식','삼각방정식·부등식'],'수열':['등차수열','등비수열','수열의 합(Σ)','수학적 귀납법']},
-'수2':{'함수의 극한과 연속':['함수의 극한','함수의 연속'],'다항함수의 미분':['미분계수와 도함수','접선의 방정식','극값·최대·최소','방정식·부등식 활용'],'다항함수의 적분':['부정적분','정적분','정적분의 활용']}
-};
+'중1':{
+'소인수분해':['소수와 합성수','거듭제곱','소인수분해','최대공약수','최소공배수'],
+'정수와 유리수':['정수와 유리수의 뜻','수직선과 절댓값','정수·유리수의 덧셈·뺄셈','정수·유리수의 곱셈·나눗셈'],
+'문자와 식':['문자의 사용과 식의 값','일차식의 계산','방정식과 항등식','일차방정식의 풀이','일차방정식의 활용'],
+'좌표평면과 그래프':['순서쌍과 좌표','그래프','정비례','반비례'],
+'기본도형':['점·선·면·각','수직과 평행','위치 관계','기본 작도','삼각형의 합동'],
+'평면도형의 성질':['다각형의 성질','원과 부채꼴'],
+'입체도형의 성질':['다면체','회전체','겉넓이와 부피'],
+'자료의 정리와 해석':['줄기와 잎 그림','도수분포표','히스토그램과 도수분포다각형','상대도수']
+},
+'중2':{
+'수와 식':['유리수와 순환소수','단항식의 계산','다항식의 계산'],
+'일차부등식':['부등식의 성질','일차부등식의 풀이','일차부등식의 활용','연립일차부등식'],
+'연립일차방정식':['미지수 2개인 일차방정식','연립방정식의 풀이','연립방정식의 활용'],
+'일차함수와 그래프':['일차함수와 그 그래프','일차함수의 성질','일차함수의 활용','일차함수와 일차방정식의 관계'],
+'도형의 성질':['이등변삼각형','직각삼각형의 합동 조건','삼각형의 외심과 내심','평행사변형','여러 가지 사각형'],
+'도형의 닮음':['도형의 닮음','삼각형의 닮음 조건','닮음의 활용','평행선과 선분의 길이의 비','삼각형의 무게중심'],
+'피타고라스 정리':['피타고라스 정리','피타고라스 정리의 활용'],
+'확률':['경우의 수','확률의 뜻과 성질','확률의 덧셈·곱셈','여사건의 확률']
+},
+'중3':{
+'실수와 그 계산':['제곱근의 뜻과 성질','무리수와 실수','제곱근의 곱셈·나눗셈','제곱근의 덧셈·뺄셈'],
+'다항식의 곱셈과 인수분해':['다항식의 곱셈','인수분해 공식','인수분해의 활용'],
+'이차방정식':['이차방정식과 그 풀이','근의 공식','이차방정식의 근과 계수의 관계','이차방정식의 활용'],
+'이차함수와 그래프':['이차함수 y=ax²의 그래프','이차함수 y=a(x-p)²+q의 그래프','이차함수 y=ax²+bx+c의 그래프','이차함수의 최댓값·최솟값'],
+'삼각비':['삼각비의 뜻','삼각비의 값','삼각비의 활용(길이·넓이)'],
+'원의 성질':['원과 직선','원주각','원주각의 활용'],
+'통계':['대푯값','분산과 표준편차','상관관계']
+},
+'공통수학1':{
+'다항식':['다항식의 연산','나머지정리','인수분해'],
+'방정식과 부등식':['복소수','이차방정식','이차방정식과 이차함수','여러 가지 방정식','여러 가지 부등식'],
+'경우의 수':['순열','조합'],
+'행렬':['행렬과 연산','역행렬과 연립일차방정식']
+},
+'공통수학2':{
+'도형의 방정식':['평면좌표','직선의 방정식','원의 방정식','도형의 이동'],
+'집합과 명제':['집합','명제와 조건','충분·필요조건','귀류법'],
+'함수와 그래프':['함수','유리함수','무리함수']
+},
+'대수':{
+'지수와 로그':['지수','로그','지수함수','로그함수'],
+'삼각함수':['삼각함수의 뜻','삼각함수의 그래프','삼각함수의 활용','사인법칙·코사인법칙'],
+'수열':['등차수열','등비수열','수열의 합(Σ)','수학적 귀납법']
+},
+'미적분1':{
+'함수의 극한과 연속':['함수의 극한','함수의 연속·불연속'],
+'미분':['미분계수와 도함수','도함수의 계산','접선의 방정식','평균값 정리','극값·최대·최소','방정식·부등식에 활용','속도·가속도에 활용'],
+'적분':['부정적분','정적분','정적분의 활용(넓이·부피)']
+},
+'확률과통계':{
+'경우의 수':['합의 법칙·곱의 법칙','순열','같은 것이 있는 순열','원순열','조합','중복조합','이항정리','이항계수의 성질'],
+'확률':['수학적 확률·통계적 확률','확률의 기본 성질','확률의 덧셈정리','여사건의 확률','조건부확률','확률의 곱셈정리','독립사건·종속사건','독립시행의 확률'],
+'통계':['이산확률변수와 확률질량함수','이산확률변수의 기댓값·분산·표준편차','연속확률변수','이항분포 B(n,p)','이항분포의 평균·분산·표준편차','정규분포 N(m,σ²)','표준정규분포','이항분포와 정규분포의 관계','표본평균의 분포','모평균의 추정(신뢰구간)']
+},
+'미적분2':{
+'수열의 극한':['수열의 극한','급수'],
+'여러 가지 함수의 미분':['지수·로그함수의 미분','삼각함수의 미분','매개변수·음함수 미분','이계도함수'],
+'여러 가지 적분법':['치환적분법','부분적분법','정적분의 활용(넓이·부피·속도)']
+},
+'수1':{
+'지수와 로그':['지수법칙','지수함수 그래프','지수방정식·부등식','로그의 정의·성질','로그함수 그래프','상용로그·지표와 가수'],
+'삼각함수':['호도법','삼각함수의 정의','삼각함수 그래프','삼각함수의 성질','삼각방정식·부등식','사인·코사인 법칙'],
+'수열':['등차수열','등비수열','수열의 합(Σ)','수학적 귀납법']
+},
+'수2':{
+'함수의 극한과 연속':['함수의 극한','우극한·좌극한','함수의 연속·불연속'],
+'다항함수의 미분':['미분계수와 도함수','도함수의 계산','접선의 방정식','극값·최대·최소','방정식·부등식 활용','속도·가속도 활용'],
+'다항함수의 적분':['부정적분','정적분의 계산','정적분의 활용(넓이·부피)']
+}
+}
 const DOMAIN_MAP=[
 {name:'수·대수',units:['소인수분해','정수와 유리수','실수와 그 계산','유리수와 순환소수','다항식','단항식과 다항식','인수분해','지수와 로그','수열','대수']},
 {name:'방정식·부등식',units:['문자와 식','방정식','부등식','이차방정식','방정식과 부등식']},
@@ -403,7 +459,7 @@ function vDetail(){
     <div class="log-item">
       <div class="log-sess">${l.session}회</div>
       <div class="log-body">
-        <div class="log-main">${l.subject} - ${l.unit}</div>
+        <div class="log-main">${l.subject} - ${(l.units||(l.unit?[l.unit]:[])).filter(Boolean).join(", ")}</div>
         <div class="log-sub">${fmtDate(l.date)}${l.memo?' · '+l.memo:''}</div>
         <div class="log-tags">
           ${l.understanding>=0?`<span class="tag ${UND_TC[l.understanding]}">${UND[l.understanding]}</span>`:''}
@@ -509,7 +565,7 @@ function vLog(){
       <div><label class="f-label">회차</label><input class="f-input" id="fsess" type="text" value="${f.session}" oninput="setLF('session',parseInt(this.value)||1)" style="text-align:center;font-weight:700;font-size:18px"></div>
     </div>
     <div class="f-row"><label class="f-label">과목</label><div class="chips">${subjChips}</div></div>
-    ${unitList.length?`<div class="f-row"><label class="f-label">대단원</label><div class="chips">${unitChips}</div></div>`:''}
+    ${unitList.length?`<div class="f-row"><label class="f-label">대단원 (복수 선택 가능)</label><div class="chips">${unitChips}</div></div>`:''}
     ${subUnitList.length?`<div class="f-row"><label class="f-label">소단원 선택</label><div class="chips">${subUnitBtns}</div></div>`:''}
     ${selectedChips?`<div class="f-row"><label class="f-label">선택된 소단원</label><div class="chips">${selectedChips}</div></div>`:''}
     <div class="f-row"><label class="f-label">이해도</label><div class="und-row">${undBtns}</div></div>
@@ -534,7 +590,7 @@ function vNewsletter(){
     const items=logs.map(l=>`<div class="nl-check-item">
       <input type="checkbox" class="nl-cb" id="nlc_${l.id}" ${S.nlSelectedIds.has(l.id)?'checked':''} onchange="toggleNlLog('${l.id}',this.checked)">
       <label class="nl-check-label" for="nlc_${l.id}">
-        <b>${l.session}회차</b> ${fmtDate(l.date)} — ${l.subject} · ${l.unit}
+        <b>${l.session}회차</b> ${fmtDate(l.date)} — ${l.subject} · ${(l.units||(l.unit?[l.unit]:[])).filter(Boolean).join(', ')}
         ${l.understanding>=0?`<span class="tag ${UND_TC[l.understanding]}" style="font-size:10.5px">${UND[l.understanding]}</span>`:''}
         ${l.homework>=0?`<span class="tag ${HW_TC[l.homework]}" style="font-size:10.5px">${HW[l.homework]}</span>`:''}
       </label>
@@ -595,7 +651,7 @@ function vNewsletter(){
     const f=S.nlForm, st=S.settings;
 
     const logsHtml=selLogs.map(l=>`<li style="margin-bottom:8px">
-      <b>${l.session}회차 (${fmtDate(l.date)})</b> — ${l.subject} · ${l.unit}<br>
+      <b>${l.session}회차 (${fmtDate(l.date)})</b> — ${l.subject} · ${(l.units||(l.unit?[l.unit]:[])).filter(Boolean).join(', ')}<br>
       ${(l.subUnits||[]).length?'소단원: '+(l.subUnits||[]).join(', ')+'<br>':''}
       이해도: ${l.understanding>=0?UND[l.understanding]:'—'} &nbsp;|&nbsp; 과제: ${l.homework>=0?HW[l.homework]:'—'}
       ${l.memo?'<br>메모: '+l.memo:''}
@@ -810,22 +866,36 @@ function deleteStudent(id){
 
 function startLog(studentId){
   S.editLogId=null;
-  S.logForm={studentId,date:today(),session:nextSess(studentId),subject:'',unit:'',subUnits:[],understanding:-1,homework:-1,memo:''};
+  S.logForm={studentId,date:today(),session:nextSess(studentId),subject:'',units:[],subUnits:[],understanding:-1,homework:-1,memo:''};
   go('logLesson');
 }
 function startEditLog(logId){
   const l=S.logs.find(l=>l.id===logId); if(!l)return;
   S.editLogId=logId;
-  S.logForm={...l,subUnits:[...(l.subUnits||[])]};
+  S.logForm={...l,units:[...(l.units||(l.unit?[l.unit]:[]))],subUnits:[...(l.subUnits||[])]};
   go('logLesson',{activeStudentId:l.studentId});
 }
 function setLF(k,v){S.logForm[k]=v;}
+function toggleLogUnit(el){
+  const u=el.dataset.v;
+  if(!S.logForm.units)S.logForm.units=[];
+  const i=S.logForm.units.indexOf(u);
+  if(i===-1)S.logForm.units.push(u);
+  else S.logForm.units.splice(i,1);
+  // 더 이상 유효하지 않은 소단원 제거
+  const validSubs=new Set((S.logForm.units||[]).flatMap(un=>{
+    const subj=S.logForm.subject;
+    return(subj&&UNITS[subj]&&UNITS[subj][un])||[];
+  }));
+  S.logForm.subUnits=(S.logForm.subUnits||[]).filter(c=>validSubs.has(c));
+  render();
+}
 function toggleSubUnit(el){const c=typeof el==='string'?el:el;const i=S.logForm.subUnits.indexOf(c);if(i===-1)S.logForm.subUnits.push(c);else S.logForm.subUnits.splice(i,1);render();}
 function removeSubUnit(el){const c=typeof el==='string'?el:el;S.logForm.subUnits=S.logForm.subUnits.filter(x=>x!==c);render();}
 
 function saveLog(){
   const f=S.logForm;
-  if(!f.unit){showToast('대단원을 선택해주세요');return;}
+  if(!(f.units&&f.units.length)){showToast('대단원을 선택해주세요');return;}
   if(f.understanding<0){showToast('이해도를 선택해주세요');return;}
   if(S.editLogId){
     const l=S.logs.find(l=>l.id===S.editLogId);
@@ -907,7 +977,7 @@ function nlNext(){
   const selLogs=[...S.nlSelectedIds].map(id=>S.logs.find(l=>l.id===id)).filter(Boolean).sort((a,b)=>a.session-b.session);
   let txt='이번 학습 기간 동안 다음과 같이 수업을 진행하였습니다.\n\n';
   selLogs.forEach(l=>{
-    txt+=`• ${l.session}회차 (${fmtDate(l.date)}) | ${l.subject} — ${l.unit}\n`;
+    txt+=`• ${l.session}회차 (${fmtDate(l.date)}) | ${l.subject} — ${(l.units||(l.unit?[l.unit]:[])).filter(Boolean).join(', ')}\n`;
     if((l.subUnits||[]).length)txt+='  소단원: '+(l.subUnits||[]).join(', ')+'\n';
     txt+='  이해도: '+(l.understanding>=0?UND[l.understanding]:'—')+' | 과제: '+(l.homework>=0?HW[l.homework]:'—')+'\n';
     if(l.memo)txt+='  메모: '+l.memo+'\n';
@@ -917,7 +987,7 @@ function nlNext(){
   if(!S.nlForm.planRows||!S.nlForm.planRows.length)S.nlForm.planRows=[{id:uid(),unit:'',date:'',session:'',subUnits:[]}];
   S.nlStep=2;render();
 }
-function setPlanUnit(sel){const i=parseInt(sel.dataset.idx);S.nlForm.planRows[i].unit=sel.value;S.nlForm.planRows[i].subUnits=[];render();}
+function setPlanUnit(sel){const i=parseInt(sel.dataset.idx);S.nlForm.planRows[i].unit=sel.value;render();}
 function addPlanSu(el){const i=parseInt(el.dataset.idx),su=el.dataset.su;if(!S.nlForm.planRows[i].subUnits)S.nlForm.planRows[i].subUnits=[];if(!S.nlForm.planRows[i].subUnits.includes(su))S.nlForm.planRows[i].subUnits.push(su);render();}
 function rmPlanSu(el){const i=parseInt(el.dataset.idx),su=el.dataset.su;S.nlForm.planRows[i].subUnits=(S.nlForm.planRows[i].subUnits||[]).filter(x=>x!==su);render();}
 function nlPreview(){
@@ -991,7 +1061,7 @@ function initRadar(){
   destroyChart('radar');
   const logs=getLogs(S.activeStudentId);
   if(!logs.length){canvas.parentElement.innerHTML='<div style="text-align:center;padding:32px;color:#aab0bc;font-size:13px">수업 기록을 추가하면<br>영역별 이해도가 표시됩니다</div>';return;}
-  const unitSet=[...new Set(logs.map(l=>l.unit).filter(Boolean))];
+  const unitSet=[...new Set(logs.flatMap(l=>(l.units||(l.unit?[l.unit]:[])).filter(Boolean)))];
   const scores=unitSet.map(unit=>{
     const rel=logs.filter(l=>l.unit===unit);
     return Math.round(rel.reduce((s,l)=>s+(l.understanding===0?100:l.understanding===1?65:30),0)/rel.length);
